@@ -3,39 +3,40 @@ import requests
 
 app = Flask(__name__)
 
-# توکن ربات روبیکا
-BOT_TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
+TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
+URL = f"https://messengerg2c37.iranl.ms/bot{TOKEN}/sendMessage"
 
-# آدرس API روبیکا
-API_URL = f"https://messengerg2c37.iranl.ms/bot{BOT_TOKEN}/sendMessage"
-
-@app.route('/', methods=['GET'])
-def index():
-    return "ربات روشن است ✅"
+@app.route('/')
+def home():
+    return "رو بات روشنه :)"
 
 @app.route('/receiveUpdate', methods=['POST'])
-def webhook():
-    data = request.get_json()
-    print("📥 پیام دریافت شد:", data)
-
+def receive_update():
     try:
-        chat_id = data['message']['chat']['id']
-        text = data['message'].get('text', '')
+        data = request.get_json()
+        print("📥 پیام دریافت شد:", data)
 
-        # پاسخ پیش‌فرض
-        if text == "/start":
-            reply = "سلام! به ربات چت ناشناس طاها خوش اومدی 🤖\nپیامتو بفرست تا با یه نفر ناشناس چت کنی..."
+        # چک کن که نوع آپدیت NewMessage باشه
+        if data.get("update", {}).get("type") == "NewMessage":
+            chat_id = data["update"]["chat_id"]
+            message = data["update"]["new_message"]
+            text = message.get("text", "")
+
+            print("✉️ پیام کاربر:", text)
+
+            reply = "سلام! خوش اومدی به چت‌بات ناشناس طاها 🤖"
+
+            response = requests.post(URL, json={
+                "chat_id": chat_id,
+                "text": reply
+            })
+
+            print("✅ پاسخ ارسال شد.")
         else:
-            reply = "✅ پیام شما دریافت شد. (البته هنوز جفت‌سازی فعال نشده!)"
-
-        # ارسال پاسخ
-        payload = {
-            "chat_id": chat_id,
-            "text": reply
-        }
-        requests.post(API_URL, json=payload)
-
+            print("⚠️ نوع آپدیت پشتیبانی نمی‌شود.")
     except Exception as e:
         print("❌ خطا در پردازش:", e)
+    return "OK"
 
-    return '', 200
+if __name__ == '__main__':
+    app.run(debug=True)
