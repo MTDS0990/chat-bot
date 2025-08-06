@@ -6,7 +6,6 @@ from flask import Flask
 
 app = Flask(__name__)
 
-# توکن ربات روبیکا
 TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
 BASE_URL = f"https://botapi.rubika.ir/v3/{TOKEN}/"
 
@@ -22,6 +21,7 @@ def handle_updates():
                 "offset_id": last_update_id or ""
             })
             result = response.json()
+            print("📥 پیام دریافتی از روبیکا:", result)
 
             for update in result.get("updates", []):
                 last_update_id = update.get("update_id")
@@ -32,7 +32,8 @@ def handle_updates():
                 chat_id = message.get("chat_id")
                 text = message.get("text", "")
 
-                # پاسخ‌ها
+                print(f"📨 پیام جدید: از {chat_id} → {text}")
+
                 if text == "/start":
                     reply = "سلام! 👋 به ربات چت ناشناس خوش اومدی."
                 else:
@@ -46,7 +47,7 @@ def handle_updates():
         except Exception as e:
             print("❌ خطا:", e)
 
-        time.sleep(2)  # وقفه بین هر بار چک کردن پیام
+        time.sleep(3)
 
 @app.route("/")
 def index():
