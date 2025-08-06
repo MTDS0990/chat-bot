@@ -1,59 +1,41 @@
+from flask import Flask, request
 import requests
-import threading
-import time
-import os
-from flask import Flask
 
 app = Flask(__name__)
 
-TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
-BASE_URL = f"https://botapi.rubika.ir/v3/{TOKEN}/"
+# توکن ربات روبیکا
+BOT_TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
 
-last_update_id = None
+# آدرس API روبیکا
+API_URL = f"https://messengerg2c37.iranl.ms/bot{BOT_TOKEN}/sendMessage"
 
-def handle_updates():
-    global last_update_id
-    print("✅ ربات روشن شد و در حال اجراست...")
-
-    while True:
-        try:
-            response = requests.post(BASE_URL + "getUpdates", data={
-                "offset_id": last_update_id or ""
-            })
-            result = response.json()
-            print("📥 پیام دریافتی از روبیکا:", result)
-
-            for update in result.get("updates", []):
-                last_update_id = update.get("update_id")
-                message = update.get("message") or update.get("inline_message")
-                if not message:
-                    continue
-
-                chat_id = message.get("chat_id")
-                text = message.get("text", "")
-
-                print(f"📨 پیام جدید: از {chat_id} → {text}")
-
-                if text == "/start":
-                    reply = "سلام! 👋 به ربات چت ناشناس خوش اومدی."
-                else:
-                    reply = "پیامت دریافت شد ✅"
-
-                requests.post(BASE_URL + "sendMessage", data={
-                    "chat_id": chat_id,
-                    "text": reply
-                })
-
-        except Exception as e:
-            print("❌ خطا:", e)
-
-        time.sleep(3)
-
-@app.route("/")
+@app.route('/', methods=['GET'])
 def index():
-    return "🤖 ربات روبیکا فعال است و آماده پاسخگویی ✅"
+    return "ربات روشن است ✅"
 
-if __name__ == "__main__":
-    threading.Thread(target=handle_updates, daemon=True).start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+@app.route('/receiveUpdate', methods=['POST'])
+def webhook():
+    data = request.get_json()
+    print("📥 پیام دریافت شد:", data)
+
+    try:
+        chat_id = data['message']['chat']['id']
+        text = data['message'].get('text', '')
+
+        # پاسخ پیش‌فرض
+        if text == "/start":
+            reply = "سلام! به ربات چت ناشناس طاها خوش اومدی 🤖\nپیامتو بفرست تا با یه نفر ناشناس چت کنی..."
+        else:
+            reply = "✅ پیام شما دریافت شد. (البته هنوز جفت‌سازی فعال نشده!)"
+
+        # ارسال پاسخ
+        payload = {
+            "chat_id": chat_id,
+            "text": reply
+        }
+        requests.post(API_URL, json=payload)
+
+    except Exception as e:
+        print("❌ خطا در پردازش:", e)
+
+    return '', 200
