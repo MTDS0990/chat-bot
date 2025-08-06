@@ -4,11 +4,11 @@ import requests
 app = Flask(__name__)
 
 TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
-URL = f"https://messengerg2c37.iranl.ms/bot{TOKEN}/sendMessage"
+SEND_URL = f"https://messengerg2c37.iranl.ms/bot{TOKEN}/sendMessage"
 
 @app.route('/')
 def home():
-    return "رو بات روشنه :)"
+    return "🤖 ربات روشنه و کار می‌کنه!"
 
 @app.route('/receiveUpdate', methods=['POST'])
 def receive_update():
@@ -16,26 +16,27 @@ def receive_update():
         data = request.get_json()
         print("📥 پیام دریافت شد:", data)
 
-        # چک کن که نوع آپدیت NewMessage باشه
-        if data.get("update", {}).get("type") == "NewMessage":
-            chat_id = data["update"]["chat_id"]
-            message = data["update"]["new_message"]
-            text = message.get("text", "")
+        update = data.get("update", {})
+        if update.get("type") == "NewMessage":
+            chat_id = update.get("chat_id")
+            new_message = update.get("new_message", {})
+            text = new_message.get("text", "")
+            sender_id = new_message.get("sender_id", "")
 
-            print("✉️ پیام کاربر:", text)
+            print("✉️ پیام از:", sender_id, "| متن:", text)
 
-            reply = "سلام! خوش اومدی به چت‌بات ناشناس طاها 🤖"
-
-            response = requests.post(URL, json={
+            response = requests.post(SEND_URL, json={
                 "chat_id": chat_id,
-                "text": reply
+                "text": f"سلام {sender_id}، پیامتو گرفتم ✅"
             })
 
-            print("✅ پاسخ ارسال شد.")
+            print("✅ پاسخ فرستاده شد:", response.text)
         else:
-            print("⚠️ نوع آپدیت پشتیبانی نمی‌شود.")
+            print("⚠️ نوع آپدیت پشتیبانی نمی‌شود:", update.get("type"))
+
     except Exception as e:
-        print("❌ خطا در پردازش:", e)
+        print("❌ خطا در پردازش:", str(e))
+
     return "OK"
 
 if __name__ == '__main__':
