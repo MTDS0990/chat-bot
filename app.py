@@ -4,40 +4,52 @@ import requests
 app = Flask(__name__)
 
 TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
-SEND_URL = f"https://messengerg2c37.iranl.ms/bot{TOKEN}/sendMessage"
+BASE_API = f"https://botapi.rubika.ir/v3/{TOKEN}"
 
-@app.route('/')
+SEND_URL = BASE_API + "/sendMessage"
+
+@app.route('/', methods=['GET'])
 def home():
-    return "🤖 ربات روشنه و کار می‌کنه!"
+    return "🤖 ربات آماده‌ است!"
 
 @app.route('/receiveUpdate', methods=['POST'])
-def receive_update():
-    try:
-        data = request.get_json()
-        print("📥 پیام دریافت شد:", data)
+def webhook():
+    data = request.get_json()
+    print("📥 پیام دریافت شد:", data)
 
-        update = data.get("update", {})
-        if update.get("type") == "NewMessage":
-            chat_id = update.get("chat_id")
-            new_message = update.get("new_message", {})
-            text = new_message.get("text", "")
-            sender_id = new_message.get("sender_id", "")
+    # ساختار body می‌تواند شامل "inline_message" یا "update"
+    if "update" in data and data["update"].get("type") == "NewMessage":
+        chat_id = data["update"].get("chat_id")
+        msg = data["update"].get("new_message", {})
+        text = msg.get("text", "")
+        sender_id = msg.get("sender_id", "")
 
-            print("✉️ پیام از:", sender_id, "| متن:", text)
+        print(f"✉️ پیام از {sender_id}: {text}")
 
-            response = requests.post(SEND_URL, json={
-                "chat_id": chat_id,
-                "text": f"سلام {sender_id}، پیامتو گرفتم ✅"
-            })
-
-            print("✅ پاسخ فرستاده شد:", response.text)
+        # پاسخ:
+        if text == "/start":
+            reply = "سلام! به چت ناشناس خوش اومدی 💬"
         else:
-            print("⚠️ نوع آپدیت پشتیبانی نمی‌شود:", update.get("type"))
+            reply = f"تو گفتی: {text}"
 
-    except Exception as e:
-        print("❌ خطا در پردازش:", str(e))
+        resp = requests.post(SEND_URL, json={"chat_id": chat_id, "text": reply})
+        print("✅ پاسخ ارسال شد:", resp.text)
+
+    elif "inline_message" in data:
+        im = data["inline_message"]
+        chat_id = im.get("chat_id")
+        text = im.get("text", "")
+        print(f"📲 پیام دکمه‌ای: {text}")
+
+        requests.post(SEND_URL, json={
+            "chat_id": chat_id,
+            "text": f"فشردی: {text}"
+        })
+
+    else:
+        print("⚠️ پیام ناشناس یا نوع پشتیبانی‌نشده")
 
     return "OK"
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(request.environ.get("PORT", 5000)))
