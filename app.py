@@ -3,118 +3,103 @@ import requests
 
 app = Flask(__name__)
 
-API_URL = "https://botapi.rubika.ir/v3"
-BOT_TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
+TOKEN = "BJAJB0ZFKNCMRUTVFQBFNGNYVYQKAXCWYPHWLGELMBVZRBLYAMMVQBHKFCTIOQGF"
+API_URL = f"https://botapi.rubika.ir/v3/bot{TOKEN}"
 
-users = {}
-waiting_list = {"male": [], "female": [], "any": []}
-chats = {}
+users = {}       # اطلاعات کاربران
+waiting = []     # لیست انتظار برای چت
 
 def send_message(chat_id, text, buttons=None):
-    payload = {
+    data = {
         "chat_id": chat_id,
-        "text": text,
+        "text": text
     }
     if buttons:
-        payload["buttons"] = buttons
-    try:
-        requests.post(f"{API_URL}/bot{BOT_TOKEN}/sendMessage", json=payload)
-    except Exception as e:
-        print(f"❌ خطا در ارسال پیام: {e}")
+        data["buttons"] = buttons
+    requests.post(f"{API_URL}/sendMessage", json=data)
 
-@app.route("/", methods=["GET"])
-def home():
-    return "✅ ربات فعال است"
+def forward_file(file_type, chat_id, file_id):
+    requests.post(f"{API_URL}/send{file_type.capitalize()}",
+                  json={"chat_id": chat_id, file_type + "_id": file_id})
 
 @app.route("/receiveUpdate", methods=["POST"])
 def receive_update():
-    data = request.json
-    print("📥 پیام دریافت شد:", data)
+    update = request.json.get("update", {})
+    if update.get("type") != "NewMessage":
+        return "OK", 200
 
-    try:
-        update = data.get("update", {})
-        msg = update.get("new_message", {})
-        chat_id = update.get("chat_id")
-        user_id = msg.get("sender_id")
-        text = msg.get("text", "").strip()
+    message = update["new_message"]
+    chat_id = update["chat_id"]
+    sender_id = message["sender_id"]
 
-        if user_id not in users:
-            users[user_id] = {"gender": None, "preferred": None, "partner": None}
-            send_message(chat_id, "سلام! 😊\nبرای شروع، جنسیت خودتو مشخص کن:", buttons=[
-                [{"text": "👩 دختر"}, {"text": "👨 پسر"}]
-            ])
-            return "OK"
+    user = users.setdefault(sender_id, {"step": "gender"})
 
-        user = users[user_id]
+    partner_id = user.get("partner_id")
+    text = message.get("text")
+    photo_id = message.get("photo_id")
+    voice_id = message.get("voice_id")
 
-        if user["gender"] is None:
-            if text in ["👩 دختر", "دختر"]:
-                user["gender"] = "female"
-            elif text in ["👨 پسر", "پسر"]:
-                user["gender"] = "male"
-            else:
-                send_message(chat_id, "لطفاً فقط از دکمه‌ها استفاده کن.")
-                return "OK"
-            send_message(chat_id, "عالیه! حالا انتخاب کن می‌خوای با چه کسی چت کنی:", buttons=[
-                [{"text": "👩 دختر"}, {"text": "👨 پسر"}],
-                [{"text": "🎲 فرقی نداره"}]
-            ])
-            return "OK"
+    # پایان چت
+    if text == "🔚 پایان چت":
+        if partner_id:
+            send_message(partner_id, "❌ مخاطب از چت خارج شد.")
+            users[partner_id]["partner_id"] = None
+        user["partner_id"] = None
+        send_message(chat_id, "✅ چت پایان یافت.")
+        return "OK", 200
 
-        if user["preferred"] is None:
-            if text in ["👩 دختر", "دختر"]:
-                user["preferred"] = "female"
-            elif text in ["👨 پسر", "پسر"]:
-                user["preferred"] = "male"
-            elif text in ["🎲 فرقی نداره", "فرقی نداره"]:
-                user["preferred"] = "any"
-            else:
-                send_message(chat_id, "لطفاً فقط از دکمه‌ها استفاده کن.")
-                return "OK"
+    # اگر در حال چت هستند، پیام، ویس یا عکس را فوروارد کن
+    if partner_id:
+        if text:
+            send_message(partner_id, f"✉️: {text}", [["🔚 پایان چت"]])
+        elif photo_id:
+            forward_file("photo", partner_id, photo_id)
+        elif voice_id:
+            forward_file("voice", partner_id, voice_id)
+        return "OK", 200
 
-            match_user(user_id)
-            return "OK"
-
-        # اگر در چت است، پیام را به طرف مقابل بفرست
-        if user["partner"]:
-            partner_id = user["partner"]
-            if partner_id in users and users[partner_id]["partner"] == user_id:
-                requests.post(f"{API_URL}/bot{BOT_TOKEN}/sendMessage", json={
-                    "chat_id": partner_id,
-                    "text": text
-                })
+    # شروع مسیر فیلتر
+    if user["step"] == "gender":
+        send_message(chat_id, "🌸 جنسیت خود را انتخاب کنید:", [
+            ["🙎‍♂️ پسر", "🙎‍♀️ دختر"]
+        ])
+        user["step"] = "set_gender"
+    elif user["step"] == "set_gender":
+        if text == "🙎‍♂️ پسر":
+            user["gender"] = "male"
+        elif text == "🙎‍♀️ دختر":
+            user["gender"] = "female"
         else:
-            send_message(chat_id, "⏳ در حال جستجو برای چت با کسی هستیم... لطفاً صبور باش.")
-    except Exception as e:
-        print(f"❌ خطا در پردازش: {e}")
-    return "OK"
-
-def match_user(user_id):
-    user = users[user_id]
-    preferred = user["preferred"]
-
-    potential_partners = []
-    if preferred == "any":
-        potential_partners = waiting_list["male"] + waiting_list["female"] + waiting_list["any"]
+            send_message(chat_id, "لطفاً یکی از گزینه‌ها را انتخاب کنید.")
+            return "OK", 200
+        user["step"] = "partner_gender"
+        send_message(chat_id, "💫 می‌خوای با چه جنسیتی چت کنی؟", [
+            ["🙎‍♂️ پسر", "🙎‍♀️ دختر", "🎲 فرقی نداره"]
+        ])
+    elif user["step"] == "partner_gender":
+        if text == "🙎‍♂️ پسر":
+            user["target"] = "male"
+        elif text == "🙎‍♀️ دختر":
+            user["target"] = "female"
+        elif text == "🎲 فرقی نداره":
+            user["target"] = "any"
+        else:
+            send_message(chat_id, "یکی از گزینه‌ها رو انتخاب کن.")
+            return "OK", 200
+        user["step"] = "match"
+        send_message(chat_id, "✅ برای شروع چت روی دکمه زیر بزن:", [["🚀 شروع چت"]])
+    elif user["step"] == "match" and text == "🚀 شروع چت":
+        for uid, u in users.items():
+            if uid != sender_id and not u.get("partner_id"):
+                if user["target"] == "any" or u.get("gender") == user["target"]:
+                    if u["target"] == "any" or user["gender"] == u["target"]:
+                        user["partner_id"] = uid
+                        u["partner_id"] = sender_id
+                        send_message(uid, "🎉 مخاطب پیدا شد! می‌تونی چت کنی.", [["🔚 پایان چت"]])
+                        send_message(chat_id, "🎉 مخاطب پیدا شد! می‌تونی چت کنی.", [["🔚 پایان چت"]])
+                        return "OK", 200
+        send_message(chat_id, "⏳ منتظر بمون تا مخاطب مناسب پیدا شه.")
     else:
-        potential_partners = waiting_list[preferred] + waiting_list["any"]
+        send_message(chat_id, "برای شروع /start رو بزن.")
 
-    for pid in potential_partners:
-        partner = users.get(pid)
-        if partner and partner["partner"] is None and (
-            partner["preferred"] == user["gender"] or partner["preferred"] == "any"
-        ):
-            user["partner"] = pid
-            partner["partner"] = user_id
-            waiting_list[partner["preferred"]].remove(pid)
-
-            send_message(user_id, "✅ یه نفر پیدا شد! می‌تونی پیام بدی.")
-            send_message(pid, "✅ یه نفر پیدا شد! می‌تونی پیام بدی.")
-            return
-
-    # اگه کسی پیدا نشد، بره تو صف انتظار
-    waiting_list[preferred].append(user_id)
-    send_message(user_id, "🔍 کسی پیدا نشد، منتظر بمون تا یه نفر پیدا بشه...")
-
-if __name__ == "__main__":
-    app.run()
+    return "OK", 200
